@@ -9,14 +9,14 @@ public class TestCircle {
     System.out.println("myCircle的面积： " +  myCircle.getArea());
 
     System.out.println("-----------------------------------------------");
-    
+
     // Create a circle with radius 1
     Circle yourCircle = new Circle();
     System.out.println("yourCircle的半径： " +  yourCircle.radius);
     System.out.println("yourCircle的面积： " +  yourCircle.getArea());
 
     System.out.println("-----------------------------------------------");
-    
+
     // Modify circle radius
     yourCircle.radius = 100;
     System.out.println("yourCircle的半径： " +  yourCircle.radius);

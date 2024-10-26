@@ -123,7 +123,15 @@ Flink提供了不同层级的API。
 
 ### 1.3 Flink运行流程
 
-
+1.作业提交：用户编写Flink应用程序（包括数据源、数据处理逻辑、结果输出等）,然后通过StreamExecutionEnvironment.execute()提交作业，该代码会将应用逻辑打包成一个Flink JobGraph提交到Flink集群。
+2.Flink编译并优化用户代码，将应用逻辑转化为JobGraph（作业图）
+3.Flink的Client接收用户的JobGraph并与集群交互，将作业提交到JobManager（作业管理器）
+4.JobManager接收JobGraph后，将其转化为ExecutionGraph（执行图），并根据Flink的优化策略生成最优的执行计划。
+5.JobManager向资源管理器（ResourceManager）请求资源。ResourceManager从集群节点中分配TaskManagers来执行作业。一旦资源分配完毕，JobManager将每个Task分发给相应的TaskManager。
+6.每个TaskManager作为集群节点的工作单元，负责在各自的Slot中执行分配的任务。TaskManager执行算子并通过网络传输上下游任务之间的数据，形成实际的数据流。
+7.任务在TaskManager上执行过程中，Flink会通过DataStream API和DataSet API来管理数据流。在流处理作业中，Flink使用状态（State）管理中间结果，处理断点恢复（通过Checkpoints）以确保数据一致性。如果启用了Event Time或Watermark，Flink会基于事件时间进行窗口操作或延迟处理。
+8.Flink支持容错机制，通过检查点（Checkpoints）和快照（Savepoints）来保存作业的状态。若发生任务失败，JobManager会重新启动失败的任务，并从上次的检查点或快照恢复数据，保证处理的准确性。
+9.
 
 ## 2. 功能建模
 
@@ -141,3 +149,33 @@ graph TD
     F -->|执行任务| G[任务执行]
     G -->|监控任务| B
     G -->|任务失败重试| B
+```
+
+### 2.2 类图
+
+classDiagram
+    class 用户 {
+        +提交作业()
+    }
+    class JobManager {
+        +接收作业()
+        +分解作业()
+        +生成执行图()
+        +请求资源()
+        +调度任务()
+        +监控任务()
+        +任务失败重试()
+    }
+    class ResourceManager {
+        +分配资源()
+    }
+    class TaskManager {
+        +执行任务()
+    }
+    用户 --> JobManager
+    JobManager --> 任务
+    JobManager --> ExecutionGraph
+    JobManager --> ResourceManager
+    ResourceManager --> TaskManager
+    JobManager --> TaskManager
+    TaskManager --> 任务执行

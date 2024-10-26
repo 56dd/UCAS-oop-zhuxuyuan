@@ -164,12 +164,16 @@ graph TD
 
 ### 2.2 类图
 
-```
+```mermaid
 classDiagram
     class 用户 {
+        +String 用户名
+        +String 密码
         +提交作业()
     }
     class JobManager {
+        +String 作业ID
+        +String 作业状态
         +接收作业()
         +分解作业()
         +生成执行图()
@@ -179,9 +183,12 @@ classDiagram
         +任务失败重试()
     }
     class ResourceManager {
+        +List~资源~ 资源列表
         +分配资源()
     }
     class TaskManager {
+        +String 任务ID
+        +String 任务状态
         +执行任务()
     }
     用户 --> JobManager

@@ -199,3 +199,45 @@ classDiagram
     JobManager --> TaskManager
     TaskManager --> 任务执行
 ```
+
+### 2.3主要模块
+
+该模块分类按照flink源代码的目录结构划分，选取了其中比较重要的一些模块进行介绍：
+
+1.flink-clients：提供Flink的客户端功能，包括连接集群、提交任务等功能。
+
+2.flink-container：用于构建和支持Flink在容器化环境（如Docker、Kubernetes）中的运行。
+
+3.flink-contrib：存放Flink的贡献模块，包含一些社区贡献的插件或模块。
+
+4.flink-core：核心模块，包含Flink的基础类和常用工具，是其他模块的依赖。
+
+5.flink-core-api：包含Flink的核心API定义，为用户提供核心的数据处理接口。
+
+6.flink-datastream：实现Flink的流式数据处理API，提供流处理功能。
+
+7.flink-datastream-api：流式数据API的具体实现，包含流处理的操作、算子等。
+
+8.flink-dstl：数据流式传输库，主要用于流数据的传输和管理。
+
+9.flink-java：Flink的Java API模块，提供Java版本的API。
+
+10.flink-libraries：包括一些Flink的扩展库，例如机器学习库等。
+
+11.flink-metrics：提供度量监控功能，用于监控Flink的任务状态和性能指标。
+
+12.flink-optimizer：Flink的优化模块，用于优化任务的执行计划。
+
+13.flink-python：Python API模块，支持Flink的Python编程接口。
+
+14.flink-queryable-state：用于支持查询状态的功能，使得外部程序可以查询Flink的任务状态。
+
+15.flink-quickstart：Flink的快速开始模块，包含新手上手的项目模板。
+
+17.flink-runtime：Flink的运行时核心模块，负责任务调度、资源管理等运行时功能。
+
+18.flink-streaming-java：Java版的流处理模块，提供数据流式处理功能。
+
+接下来我将进行对flink-runtime模块的具体分析，研究flink的调度机制。
+
+##### (第一次分析完)

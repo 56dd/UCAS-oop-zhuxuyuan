@@ -151,3 +151,35 @@ public class WordCount {
 ## 2 提交作业
 
 运行./bin/flink 后，运行了 org.apache.flink.client.cli.CliFrontend 的main方法(位于flink-clients/src/main/java/org/apache/flink/client/cli/CliFrontend.java路径下),其作用是为用户提供了一个交互式的方式来管理和提交Flink作业。
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant FlinkBin as ./bin/flink
+    participant CliFrontend as org.apache.flink.client.cli.CliFrontend
+    participant CliFrontendParser as CliFrontendParser
+    participant PackagedProgram as PackagedProgram
+    participant ClientUtils as ClientUtils
+    participant WordCount as WordCount
+    participant StreamExecutionEnvironment as StreamExecutionEnvironment
+    participant PipelineExecutor as AbstractSessionClusterExecutor
+    participant PipelineExecutorUtils as PipelineExecutorUtils
+    participant ClusterClient as clusterClient
+
+    User ->> FlinkBin: 执行 ./bin/flink
+    FlinkBin ->> CliFrontend: exec "${JAVA_RUN}" ... org.apache.flink.client.cli.CliFrontend "$@"
+    CliFrontend ->> CliFrontend: main 方法
+    CliFrontend ->> CliFrontendParser: 解析参数
+    CliFrontendParser ->> CliFrontend: 返回解析结果
+    CliFrontend ->> PackagedProgram: 创建 PackagedProgram
+    CliFrontend ->> ClientUtils: 调用 ClientUtils 运行程序
+    ClientUtils ->> WordCount: 设置执行环境上下文，调用 main 方法
+    WordCount ->> StreamExecutionEnvironment: 实例化 StreamExecutionEnvironment
+    StreamExecutionEnvironment ->> StreamExecutionEnvironment: 调用 execute 方法
+    StreamExecutionEnvironment ->> PipelineExecutor: 选择并创建 PipelineExecutor
+    PipelineExecutor ->> PipelineExecutorUtils: 调用 getJobGraph 方法
+    PipelineExecutorUtils ->> PipelineExecutor: 返回 jobGraph
+    PipelineExecutor ->> ClusterClient: 生成 clusterDescriptor、clusterClientProvider、clusterClient
+    ClusterClient ->> ClusterClient: 提交任务并返回结果
+    ClusterClient ->> User: 返回提交结果
+```

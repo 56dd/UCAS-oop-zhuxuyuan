@@ -29,6 +29,7 @@ Flink就是个实时处理数据任务的框架，这个框架帮助开发者执
 这里我们直接使用flink官方给出的批处理和流处理的示例：
 
 批处理：
+
 ```java
 // pojo class WordWithCount
 public class WordWithCount {

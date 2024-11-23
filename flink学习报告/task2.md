@@ -152,6 +152,33 @@ public class WordCount {
 
 运行./bin/flink 后，运行了 org.apache.flink.client.cli.CliFrontend 的main方法(位于flink-clients/src/main/java/org/apache/flink/client/cli/CliFrontend.java路径下),其作用是为用户提供了一个交互式的方式来管理和提交Flink作业。
 
+#### 2.1 解析参数
+
+解析参数，选择Default命令行接口，然后调用命令行接口继续运行。命令行接口会调用CliFrontendParser解析参数，打包有效配置，创建PackagedProgram。
+
+#### 2.2 调用作业的main方法
+
+调用ClientUtils运行程序，设置执行环境的上下文，然后执行作业WordCount的main方法。
+
+#### 2.3 调用执行环境的execute方法
+WordCount会运行如下代码获取一个流执行环境
+
+    final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+然后调用其execute方法。
+
+#### 2.4 生成jobGraph和clusterClient
+
+流执行环境会调用getStreamGraph得到streamGraph，选择并创建PipelineExecutor。
+
+PipelineExecutor调用PipelineExecutorUtils的 getJobGraph方法得到jobGraph。然后通过工厂模式依次生成clusterDescriptor、clusterClientProvider、clusterClient。
+
+#### 2.5 提交作业并返回结果
+
+clusterClient提交任务到集群，并且返回提交结果，随后作业WordCount在集群上开始运行。
+
+可用下流程图来表示上述流程：
+
 ```mermaid
 sequenceDiagram
     participant User as 用户
@@ -183,3 +210,5 @@ sequenceDiagram
     ClusterClient ->> ClusterClient: 提交任务并返回结果
     ClusterClient ->> User: 返回提交结果
 ```
+
+

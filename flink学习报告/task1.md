@@ -144,64 +144,7 @@ Flink提供了不同层级的API。
 
 10.批处理作业执行完所有计算任务后自动停止并释放资源。流处理作业通常会持续运行直到手动取消，在取消或完成后，JobManager会通知TaskManager释放资源。
 
-
-## 2. 功能建模
-
-### 2.1 用例图
-用例图用于展示 Flink 调度机制的主要功能及其与用户的交互关系。
-
-```mermaid
-graph TD
-    A[用户] -->|提交作业| B[JobManager]
-    B -->|分解作业| C[任务]
-    B -->|生成执行图| D[Execution Graph]
-    B -->|请求资源| E[ResourceManager]
-    E -->|分配资源| F[TaskManager]
-    B -->|调度任务| F
-    F -->|执行任务| G[任务执行]
-    G -->|监控任务| B
-    G -->|任务失败重试| B
-```
-
-### 2.2 类图
-
-```mermaid
-classDiagram
-    class 用户 {
-        +String 用户名
-        +String 密码
-        +提交作业()
-    }
-    class JobManager {
-        +String 作业ID
-        +String 作业状态
-        +接收作业()
-        +分解作业()
-        +生成执行图()
-        +请求资源()
-        +调度任务()
-        +监控任务()
-        +任务失败重试()
-    }
-    class ResourceManager {
-        +List~资源~ 资源列表
-        +分配资源()
-    }
-    class TaskManager {
-        +String 任务ID
-        +String 任务状态
-        +执行任务()
-    }
-    用户 --> JobManager
-    JobManager --> 任务
-    JobManager --> ExecutionGraph
-    JobManager --> ResourceManager
-    ResourceManager --> TaskManager
-    JobManager --> TaskManager
-    TaskManager --> 任务执行
-```
-
-### 2.3主要模块
+### 1.4主要模块
 
 该模块分类按照flink源代码的目录结构划分，选取了其中比较重要的一些模块进行介绍：
 
@@ -241,4 +184,155 @@ classDiagram
 
 接下来我将进行对flink-runtime模块的具体分析，研究flink的调度机制。
 
-##### (第一次分析完)
+### 1.5 runtime核心组件及其功能
+
+1.checkpoint：管理和实现检查点机制，确保流处理作业的状态一致性和容错性。
+
+2.client: 提供与 Flink 集群交互的客户端接口和实现，包括作业提交和管理。
+
+3.dispatcher: 实现作业调度和管理，负责接收和分发作业。
+
+4.entrypoint: 定义 Flink 集群的入口点，包括启动和初始化集群组件。
+
+5.execution: 管理作业的执行，包括任务调度和资源分配。
+
+6.heartbeat: 实现心跳机制，用于监控和维护集群节点的健康状态。
+
+7.io: 定义和实现输入输出操作，包括数据传输和存储。
+
+8.jobgraph: 定义作业图的结构和操作，用于描述作业的执行计划。
+
+9.jobmaster:实现作业主节点的功能，负责作业的调度和管理。
+
+10.operators: 定义和实现流处理操作符，包括各种数据转换和处理逻辑。
+
+11.resourcemanager: 管理集群资源，负责资源的分配和回收。
+
+12.scheduler: 实现作业调度算法，负责将任务分配到合适的资源上执行。
+
+13.taskexecutor: 实现任务执行节点的功能，负责具体任务的执行。
+
+14.webmonitor: 提供 Web 界面，用于监控和管理 Flink 集群。
+
+## 2. 功能建模
+
+### 2.1 需求建模
+
+在flink当中，我们以被誉为大数据当中的helloworld的wordcount为例，比如我们想要提交wordcount这么一个作业，它如何提交作业，执行任务，并返回结果呢？
+
+---
+
+### 需求模型-How
+
+**[用例名称]**  
+Flink作业调度与执行
+
+**[场景]**  
+- **Who:** 用户、JobManager、ResourceManager、TaskManager  
+- **Where:** 分布式计算环境（集群或云环境）  
+- **When:** 用户提交作业时（运行时）  
+
+**[用例描述]**  
+1. 用户提交作业到Flink集群的JobManager。  
+2. JobManager分解作业为多个任务，并生成执行图（Execution Graph）。  
+   2-1. 用户提交的作业包含语法错误、逻辑错误，无法生成执行图。
+   2-2. JobManager未能在预定时间内完成资源分配和调度
+3. JobManager请求ResourceManager分配资源：
+   （资源分配规则：根据任务的资源需求动态调度。）
+   3-1. 前集群中计算或内存资源不足，无法满足作业需求。
+   3-2. 多个作业同时请求资源时发生分配冲突，导致死锁或分配失败。 
+4. ResourceManager将分配的资源传递给TaskManager，  TaskManager接收资源后，准备执行任务。  
+5. JobManager将任务调度到TaskManager，TaskManager开始执行任务：  
+   （任务执行规则：保证执行顺序与依赖关系正确。） 
+   5-1. 执行任务失败。 
+6. JobManager监控任务执行状态：  
+   - **监控规则：**  
+     - 实时获取任务执行状态。  
+     - 若任务失败，则触发重试逻辑。  
+7. 任务执行完成后，TaskManager将结果反馈给JobManager，完成作业流程。
+
+**[用例价值]**  
+实现高效、动态的作业调度与资源分配，确保任务执行的可靠性与稳定性。
+
+**[约束和限制]**  
+1. **任务资源分配：**  
+   - JobManager需要与ResourceManager保持稳定通信。  
+   - 如果资源不足，需进入等待队列或执行降级策略。  
+2. **任务执行失败处理：**    
+   - 如果多次失败，需记录日志并上报用户。  
+3. **扩展性要求：**  
+   - 支持大规模分布式任务，需满足高并发。  
+   - 作业执行的延迟需控制在可接受范围内。  
+4. **错误处理：**  
+   - 网络中断或节点故障时，需自动恢复未完成的任务。  
+
+---
+
+我们提取出其中的动词，整理合并，得到如下的功能矩阵：
+
+| 功能编号 | 功能描述                     | 备注                                                                 |
+|----------|------------------------------|----------------------------------------------------------------------|
+| 001      | 接收用户提交作业             | 用户通过API或界面提交Flink作业，JobManager接收作业进行解析。         |
+| 002      | 生成执行图                   | JobManager将作业分解为任务，并构建Execution Graph。                  |
+| 003      | 请求资源                     | JobManager向ResourceManager申请执行任务所需的计算资源。             |
+| 004      | 分配资源并注册TaskManager    | ResourceManager分配资源并通知TaskManager注册可用资源。              |
+| 005      | 调度任务到TaskManager        | JobManager根据执行图将任务分配到对应的TaskManager执行。             |
+| 006      | 监控任务执行状态             | JobManager实时监控任务状态，处理异常、超时或失败任务的重试逻辑。    |
+| 007      | 执行任务并反馈结果           | TaskManager执行分配的任务，并将执行结果或错误反馈给JobManager。      |
+| 008      | 任务失败重试机制             | JobManager根据配置的策略对失败的任务进行重试操作。                  |                |
+| 009      | 资源释放与任务完成处理       | 任务完成后，TaskManager释放资源，JobManager汇总任务结果并通知用户。 |
+
+
+### 2.2 用例图
+根据上述建立的需求模型，我们绘制如下用例图以及类图。
+
+```mermaid
+graph TD
+    A[用户] -->|提交作业| B[JobManager]
+    B -->|分解作业| C[任务]
+    B -->|生成执行图| D[Execution Graph]
+    B -->|请求资源| E[ResourceManager]
+    E -->|分配资源| F[TaskManager]
+    B -->|调度任务| F
+    F -->|执行任务| G[任务执行]
+    G -->|监控任务| B
+    G -->|任务失败重试| B
+```
+
+### 2.3 类图
+
+```mermaid
+classDiagram
+    class 用户 {
+        +String 用户名
+        +String 密码
+        +提交作业()
+    }
+    class JobManager {
+        +String 作业ID
+        +String 作业状态
+        +接收作业()
+        +分解作业()
+        +生成执行图()
+        +请求资源()
+        +调度任务()
+        +监控任务()
+        +任务失败重试()
+    }
+    class ResourceManager {
+        +List~资源~ 资源列表
+        +分配资源()
+    }
+    class TaskManager {
+        +String 任务ID
+        +String 任务状态
+        +执行任务()
+    }
+    用户 --> JobManager
+    JobManager --> 任务
+    JobManager --> ExecutionGraph
+    JobManager --> ResourceManager
+    ResourceManager --> TaskManager
+    JobManager --> TaskManager
+    TaskManager --> 任务执行
+```

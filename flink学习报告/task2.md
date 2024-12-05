@@ -166,7 +166,125 @@ public class WordCount {
 
 ### 2.2_org.apache.flink.runtime.taskexecutor.TaskManagerRunner.java
 
+该文件是为了启动TaskManager，我们还是顺着流程看一看。
 
+```java
+public static void main(String[] args) throws Exception {
+        // startup checks and logging
+        EnvironmentInformation.logEnvironmentInfo(LOG, "TaskManager", args);
+        SignalHandler.register(LOG);
+        JvmShutdownSafeguard.installAsShutdownHook(LOG);
+
+        long maxOpenFileHandles = EnvironmentInformation.getOpenFileHandlesLimit();
+
+        if (maxOpenFileHandles != -1L) {
+            LOG.info("Maximum number of open file descriptors is {}.", maxOpenFileHandles);
+        } else {
+            LOG.info("Cannot determine the maximum number of open file descriptors");
+        }
+
+        runTaskManagerProcessSecurely(args);
+    }
+```
+
+前面的这一段代码的主要用途是进行启动时的环境检查和日志记录。和之前介绍类似，就不过多赘述，然后运行runTaskManagerProcessSecurely(args)。
+
+```java
+public static void runTaskManagerProcessSecurely(String[] args) {
+        Configuration configuration = null;
+
+        try {
+            configuration = loadConfiguration(args);
+        } catch (FlinkParseException fpe) {
+            LOG.error("Could not load the configuration.", fpe);
+            System.exit(FAILURE_EXIT_CODE);
+        }
+
+        runTaskManagerProcessSecurely(checkNotNull(configuration));
+    }
+```
+
+接下来会加载配置文件，如果加载失败会报错，最后运行一个重构的runTaskManagerProcessSecurely。
+
+接下来的函数以及类的代码都非常长，这里就不完全复制粘贴代码，更多讲解每一段代码具体干了什么，来干啥这个整体流程。
+
+首先该函数会根据配置文件来初始化一个PluginManager类，该类可以管理和加载插件。
+
+```java
+final PluginManager pluginManager =
+                PluginUtils.createPluginManagerFromRootFolder(configuration);
+```
+
+然后根据配置文件和PluginManager运行runTaskManager函数。
+
+在该函数中，会再次实例一个TaskManagerRunner类，并运行start函数。
+
+```java
+try {
+            taskManagerRunner =
+                    new TaskManagerRunner(
+                            configuration,
+                            pluginManager,
+                            TaskManagerRunner::createTaskExecutorService);
+            taskManagerRunner.start();
+        } catch (Exception exception) {
+            throw new FlinkException("Failed to start the TaskManagerRunner.", exception);
+        }
+```
+
+start函数如下：
+
+```java
+public void start() throws Exception {
+        synchronized (lock) {
+            startTaskManagerRunnerServices();
+            taskExecutorService.start();
+        }
+    }
+```
+
+这里我们看到一个lock，它的作用是lock 的作用是确保在启动任务管理器运行器时的操作是互斥的，以避免并发问题。
+
+startTaskManagerRunnerServices()方法是启动TaskManagerRunner的相关服务。其中有一部分是创造了一个taskExecutorService。
+
+```java
+taskExecutorService =
+                    taskExecutorServiceFactory.createTaskExecutor(
+                            this.configuration,
+                            this.resourceId.unwrap(),
+                            rpcService,
+                            highAvailabilityServices,
+                            heartbeatServices,
+                            metricRegistry,
+                            blobCacheService,
+                            false,
+                            externalResourceInfoProvider,
+                            workingDirectory.unwrap(),
+                            this,
+                            delegationTokenReceiverRepository);
+```
+
+接下来使用taskExecutorService.start，启动一个TaskExecutorService类，然后在TaskExecutorService类当中会启动一个TaskExecutor类，至此，TaskManager创建并启动完毕。我们画一个时序图来表示这个过程：
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant TaskManagerRunner
+    participant TaskManagerRunner(2)
+    participant TaskExecutorService
+    participant TaskExecutor
+
+    Client->>TaskManagerRunner: ./bin/start-cluster.sh
+    TaskManagerRunner->>TaskManagerRunner: runTaskManagerProcessSecurely
+    TaskManagerRunner->>TaskManagerRunner: runTaskManagerProcessSecurely
+    TaskManagerRunner->>TaskManagerRunner(2): runTaskManager
+    TaskManagerRunner(2)->>TaskManagerRunner(2):start
+    TaskManagerRunner(2)->>TaskExecutorService:TaskExecutorService()创建
+    TaskExecutorService->>TaskExecutor: new TaskExecutor()
+    TaskExecutorService->>TaskExecutor: start()
+    TaskExecutor->>TaskExecutorService: TaskExecutor started
+    TaskExecutorService->>TaskManagerRunner: TaskExecutor created and started
+```
 
 ## 3 提交作业
 

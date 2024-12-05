@@ -111,16 +111,16 @@ public interface RestEndpointFactory<T extends RestfulGateway> {
 ```mermaid
 classDiagram
     class DefaultDispatcherResourceManagerComponentFactory {
-        +createSessionComponentFactory(ResourceManagerFactory<?> resourceManagerFactory) : DefaultDispatcherResourceManagerComponentFactory
+        +createSessionComponentFactory
     }
 
     class DispatcherRunnerFactory {
-        +createDispatcherRunner(LeaderElection leaderElection, FatalErrorHandler fatalErrorHandler, JobPersistenceComponentFactory jobPersistenceComponentFactory, Executor ioExecutor, RpcService rpcService, PartialDispatcherServices partialDispatcherServices) : DispatcherRunner
+        +createDispatcherRunner : DispatcherRunner
     }
 
     class RestEndpointFactory {
-        +createRestEndpoint(Configuration configuration, LeaderGatewayRetriever<DispatcherGateway> dispatcherGatewayRetriever, LeaderGatewayRetriever<ResourceManagerGateway> resourceManagerGatewayRetriever, TransientBlobService transientBlobService, ScheduledExecutorService executor, MetricFetcher metricFetcher, LeaderElection leaderElection, FatalErrorHandler fatalErrorHandler) : WebMonitorEndpoint<T>
-        +createExecutionGraphCache(RestHandlerConfiguration restConfiguration) : ExecutionGraphCache
+        +createRestEndpoint : WebMonitorEndpoint<T>
+        +createExecutionGraphCache : ExecutionGraphCache
     }
 
     class ResourceManagerFactory {
@@ -135,49 +135,27 @@ classDiagram
     class ResourceManagerRuntimeServices
     class ResourceManagerRuntimeServicesConfiguration
     class DispatcherRunner
-    class LeaderElection
-    class FatalErrorHandler
-    class JobPersistenceComponentFactory
-    class Executor
-    class RpcService
-    class PartialDispatcherServices
-    class Configuration
-    class LeaderGatewayRetriever
-    class DispatcherGateway
-    class ResourceManagerGateway
-    class TransientBlobService
-    class ScheduledExecutorService
-    class MetricFetcher
     class WebMonitorEndpoint
-    class RestHandlerConfiguration
     class ExecutionGraphCache
-    class DefaultExecutionGraphCache
 
     DefaultDispatcherResourceManagerComponentFactory --> DispatcherRunnerFactory
     DefaultDispatcherResourceManagerComponentFactory --> ResourceManagerFactory
     DefaultDispatcherResourceManagerComponentFactory --> RestEndpointFactory
     DispatcherRunnerFactory --> DispatcherRunner
-    DispatcherRunnerFactory --> LeaderElection
-    DispatcherRunnerFactory --> FatalErrorHandler
-    DispatcherRunnerFactory --> JobPersistenceComponentFactory
-    DispatcherRunnerFactory --> Executor
-    DispatcherRunnerFactory --> RpcService
-    DispatcherRunnerFactory --> PartialDispatcherServices
     RestEndpointFactory --> WebMonitorEndpoint
     RestEndpointFactory --> ExecutionGraphCache
-    RestEndpointFactory --> Configuration
-    RestEndpointFactory --> LeaderGatewayRetriever
-    RestEndpointFactory --> TransientBlobService
-    RestEndpointFactory --> ScheduledExecutorService
-    RestEndpointFactory --> MetricFetcher
-    RestEndpointFactory --> LeaderElection
-    RestEndpointFactory --> FatalErrorHandler
-    RestEndpointFactory --> RestHandlerConfiguration
-    ExecutionGraphCache <|-- DefaultExecutionGraphCache
-    LeaderGatewayRetriever <|-- DispatcherGateway
-    LeaderGatewayRetriever <|-- ResourceManagerGateway
-    ResourceManagerFactory --> ResourceManagerProcessContext
     ResourceManagerFactory --> ResourceManager
     ResourceManagerFactory --> ResourceManagerRuntimeServices
     ResourceManagerFactory --> ResourceManagerRuntimeServicesConfiguration
+    ResourceManagerFactory -->ResourceManagerProcessContext
 ```
+
+这是一个很典型的工厂模式，这样的例子还有许多，这是位于runtime.dispatcher目录下的一些文件，可以看到其中有许多以Factory结尾的文件，这些都是工厂模式的使用。
+
+![](./factory.png)
+
+使用工厂模式，可以更加方便的添加新的产品类，无需修改现有的客户端代码，符合开闭原则。
+
+## 2.代理模式
+
+

@@ -158,4 +158,76 @@ classDiagram
 
 ## 2.代理模式
 
+同时在flink-runtime当中也包含了许多代理模式，我们以org.apache.flink.runtime.jobmaster中的Jobmaster.java文件为例。
+
+![](./代理.png)
+
+我们可以看到该类当中包含了许多类，这里并未截取完全，还有许多类，我们可以看一下这个HeartbeatServices类，以这个类为例来找出当中的代理模式。
+
+HeartbeatServices 是一个类，用于管理心跳机制。心跳机制通常用于分布式系统中，以确保各个节点之间的连接是活跃的。通过定期发送心跳信号，系统可以检测到节点的故障或不可达状态，并采取相应的措施。
+
+我们看看HeartbeatServices的接口（这里代码比较长，我们只需要看其中一部分）：
+
+```java
+public interface HeartbeatServices {
+    <I, O> HeartbeatManager<I, O> createHeartbeatManager(
+            ResourceID resourceId,
+            HeartbeatListener<I, O> heartbeatListener,
+            ScheduledExecutor mainThreadExecutor,
+            Logger log);
+
+   
+    <I, O> HeartbeatManager<I, O> createHeartbeatManagerSender(
+            ResourceID resourceId,
+            HeartbeatListener<I, O> heartbeatListener,
+            ScheduledExecutor mainThreadExecutor,
+            Logger log);
+}
+
+```
+
+接下来我们看JobMaster当中的几个方法：
+
+```java
+private HeartbeatManager<Void, Void> createResourceManagerHeartbeatManager(
+            HeartbeatServices heartbeatServices) {
+        return heartbeatServices.createHeartbeatManager(
+                resourceId, new ResourceManagerHeartbeatListener(), getMainThreadExecutor(), log);
+    }
+
+private HeartbeatManager<TaskExecutorToJobManagerHeartbeatPayload, AllocatedSlotReport>
+            createTaskManagerHeartbeatManager(HeartbeatServices heartbeatServices) {
+        return heartbeatServices.createHeartbeatManagerSender(
+                resourceId, new TaskManagerHeartbeatListener(), getMainThreadExecutor(), log);
+    }
+```
+
+这里便使用了HeartbeatServices的方法，但是是在这个类当中使用的，这便实现了一个代理，我们可以画出类图：
+
+```mermaid
+classDiagram
+    class JobMaster {
+        +createTaskManagerHeartbeatManager(HeartbeatServices heartbeatServices) : HeartbeatManager
+    }
+
+    class HeartbeatServices {
+        +createHeartbeatManagerSender(ResourceID resourceId, HeartbeatListener listener, Executor executor, Logger log) : HeartbeatManager
+    }
+
+    class HeartbeatManager
+
+    class HeartbeatServices_interface {
+        +createHeartbeatManagerSender(ResourceID resourceId, HeartbeatListener listener, Executor executor, Logger log) : HeartbeatManager
+    }
+
+
+    JobMaster --> HeartbeatServices : uses
+    HeartbeatServices --> HeartbeatManager : creates
+    HeartbeatServices --> HeartbeatServices_interface: interface
+```
+
+代理模式将实际业务逻辑与辅助功能分离，遵循单一职责原则，使代码更清晰、可维护。
+
+## 3.外观模式
+
 

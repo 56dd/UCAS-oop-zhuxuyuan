@@ -230,4 +230,51 @@ classDiagram
 
 ## 3.外观模式
 
+Flink当中也有着许多外观模式的例子，我们以ResourceManager为例，位于org.apache.flink.runtime.resourcemanager的ResourceManager.java文件，我们看这个stopResourceManagerServices函数，它的作用是停止资源管理器服务，它具体实现，需要调用 terminate 方法终止框架特定的组件，停止委托令牌管理器，停止心跳服务，关闭插槽管理器等服务，但是我们使用外观模式，就不需要了解它具体是如何关闭资源管理器服务的，直接调用stopResourceManagerServices函数即可，具体代码如下：
+
+```java
+private void stopResourceManagerServices() throws Exception {
+        Exception exception = null;
+
+        try {
+            terminate();
+        } catch (Exception e) {
+            exception =
+                    new ResourceManagerException("Error while shutting down resource manager", e);
+        }
+
+        try {
+            delegationTokenManager.stop();
+        } catch (Exception e) {
+            exception = ExceptionUtils.firstOrSuppressed(e, exception);
+        }
+
+        stopHeartbeatServices();
+
+        try {
+            slotManager.close();
+        } catch (Exception e) {
+            exception = ExceptionUtils.firstOrSuppressed(e, exception);
+        }
+
+        try {
+            jobLeaderIdService.stop();
+        } catch (Exception e) {
+            exception = ExceptionUtils.firstOrSuppressed(e, exception);
+        }
+
+        resourceManagerMetricGroup.close();
+
+        clearStateInternal();
+
+        ExceptionUtils.tryRethrowException(exception);
+    }
+
+```
+
+我们可以画一个简单的图：
+
+![](./外观.png)
+
+## 4.备忘录模式
 

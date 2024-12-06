@@ -162,7 +162,152 @@ public class WordCount {
 
 ### 2.1_org.apache.flink.runtime.entrypoint.StandaloneSessionClusterEntrypoint.java
 
+该文件是为了集群组件的创建和启动，我们跟着流程走一遍：
 
+```java
+public static void main(String[] args) {
+        // startup checks and logging
+        EnvironmentInformation.logEnvironmentInfo(
+                LOG, StandaloneSessionClusterEntrypoint.class.getSimpleName(), args);//记录当前环境信息
+        SignalHandler.register(LOG);//注册信号处理器
+        JvmShutdownSafeguard.installAsShutdownHook(LOG);//注册JVM关闭钩子
+
+        final EntrypointClusterConfiguration entrypointClusterConfiguration =
+                ClusterEntrypointUtils.parseParametersOrExit(
+                        args,
+                        new EntrypointClusterConfigurationParserFactory(),
+                        StandaloneSessionClusterEntrypoint.class);
+        Configuration configuration = loadConfiguration(entrypointClusterConfiguration);
+
+        StandaloneSessionClusterEntrypoint entrypoint =
+                new StandaloneSessionClusterEntrypoint(configuration);
+
+        ClusterEntrypoint.runClusterEntrypoint(entrypoint);
+    }
+```
+
+前三行，我在代码备注当中也写了，是用于记录当前环境信息，注册信号处理器，以及注册JVM关闭钩子。这几个函数位于runtime的util文件当中，这个文件主要用于提供各种辅助功能和实用工具方法，以支持 Flink 的运行时环境。例如注册 JVM 关闭钩子，以确保在 JVM 关闭时执行特定的清理操作。
+
+接下来两行是用于加载配置文件，我们观察ClusterEntrypointUtils.parseParametersOrExit这个方法，可以发现它包含一个参数是一个工厂类，事实上这里也用到了工厂模式。
+
+接下来一行便通过配置文件创造一个入口类，用于启动和管理一个独立的会话集群，最后运行这个入口类，启动集群组件。
+
+进入ClusterEntrypoint.runClusterEntrypoint方法，该方法位于org.apache.flink.runtime.entrypoint，这里Cluster就是集群的意思，在该方法中运行startCluster()方法启动集群：
+
+```java
+public static void runClusterEntrypoint(ClusterEntrypoint clusterEntrypoint) {
+
+        final String clusterEntrypointName = clusterEntrypoint.getClass().getSimpleName();
+        try {
+            clusterEntrypoint.startCluster();
+        } catch (ClusterEntrypointException e) {
+            LOG.error(
+                    String.format("Could not start cluster entrypoint %s.", clusterEntrypointName),
+                    e);
+            System.exit(STARTUP_FAILURE_RETURN_CODE);
+        }
+```
+
+在startCluster()方法中，通过配置文件获取了插件管理器，然后运行runCluster(configuration, pluginManager)。
+
+```java
+public void startCluster() throws ClusterEntrypointException {
+        LOG.info("Starting {}.", getClass().getSimpleName());
+
+        try {
+            FlinkSecurityManager.setFromConfiguration(configuration);
+            PluginManager pluginManager =
+                    PluginUtils.createPluginManagerFromRootFolder(configuration);
+            configureFileSystems(configuration, pluginManager);
+
+            SecurityContext securityContext = installSecurityContext(configuration);
+
+            ClusterEntrypointUtils.configureUncaughtExceptionHandler(configuration);
+            securityContext.runSecured(
+                    (Callable<Void>)
+                            () -> {
+                                runCluster(configuration, pluginManager);
+
+                                return null;
+                            });
+```
+
+在runCluster当中首先调用initializeServices(configuration, pluginManager)初始化服务，接下来根据配置文件创建工厂类DispatcherResourceManagerComponentFactory
+
+```java
+final DispatcherResourceManagerComponentFactory
+                    dispatcherResourceManagerComponentFactory =
+                            createDispatcherResourceManagerComponentFactory(configuration);
+```
+
+该方法位于StandaloneSessionClusterEntrypoint类中
+
+```java
+ protected DefaultDispatcherResourceManagerComponentFactory
+            createDispatcherResourceManagerComponentFactory(Configuration configuration) {
+        return DefaultDispatcherResourceManagerComponentFactory.createSessionComponentFactory(
+                StandaloneResourceManagerFactory.getInstance());
+    }
+```
+
+该工厂类是一个接口,它包含了一个create方法：
+
+```java
+public interface DispatcherResourceManagerComponentFactory {
+
+    DispatcherResourceManagerComponent create(
+            Configuration configuration,
+            ResourceID resourceId,
+            Executor ioExecutor,
+            RpcService rpcService,
+            HighAvailabilityServices highAvailabilityServices,
+            BlobServer blobServer,
+            HeartbeatServices heartbeatServices,
+            DelegationTokenManager delegationTokenManager,
+            MetricRegistry metricRegistry,
+            ExecutionGraphInfoStore executionGraphInfoStore,
+            MetricQueryServiceRetriever metricQueryServiceRetriever,
+            Collection<FailureEnricher> failureEnrichers,
+            FatalErrorHandler fatalErrorHandler)
+            throws Exception;
+}
+```
+
+接下来将在RunCluster方法中使用这个create方法来创建集群的组件并启动他们：这些组件主要包含：webMonitorEndpoint，resourceManagerService以及dispatcherRunner。创建完成后返回，然后集群启动完毕。
+
+接下来用一副时序图来表示这一过程：
+
+```mermaid
+sequenceDiagram
+    participant StandaloneSessionClusterEntrypoint
+    participant ClusterEntrypoint
+    participant DefaultDispatcherResourceManagerComponentFactory
+    participant DispatcherResourceManagerComponent
+    participant webMonitorEndpoint
+    participant dispatcherRunner
+    participant resourceManagerService
+
+    StandaloneSessionClusterEntrypoint ->> StandaloneSessionClusterEntrypoint: ./bin/start-cluster.sh
+    StandaloneSessionClusterEntrypoint ->> ClusterEntrypoint: 解析参数，创建实例
+    ClusterEntrypoint ->> ClusterEntrypoint: runClusterEntrypoint()
+    ClusterEntrypoint ->> ClusterEntrypoint: startCluster()
+    ClusterEntrypoint ->> ClusterEntrypoint: runCluster()
+    ClusterEntrypoint ->> ClusterEntrypoint: initializeServices()
+    ClusterEntrypoint ->> StandaloneSessionClusterEntrypoint: createDispatcherResourceManagerComponentFactory()
+    StandaloneSessionClusterEntrypoint ->> DefaultDispatcherResourceManagerComponentFactory: create()
+    DefaultDispatcherResourceManagerComponentFactory ->> DispatcherResourceManagerComponent: 创建并启动
+    DefaultDispatcherResourceManagerComponentFactory ->> webMonitorEndpoint: 创建并启动
+    DefaultDispatcherResourceManagerComponentFactory ->> dispatcherRunner: 创建并启动
+    DefaultDispatcherResourceManagerComponentFactory ->> resourceManagerService: 创建并启动
+    resourceManagerService -->> DefaultDispatcherResourceManagerComponentFactory: return
+    dispatcherRunner -->> DefaultDispatcherResourceManagerComponentFactory: return
+    webMonitorEndpoint -->> DefaultDispatcherResourceManagerComponentFactory: return
+    DispatcherResourceManagerComponent -->> DefaultDispatcherResourceManagerComponentFactory: return
+    DefaultDispatcherResourceManagerComponentFactory -->> ClusterEntrypoint: return
+    ClusterEntrypoint ->> StandaloneSessionClusterEntrypoint: getShutDownFuture
+    StandaloneSessionClusterEntrypoint ->> StandaloneSessionClusterEntrypoint: 集群启动完成
+
+```
 
 ### 2.2_org.apache.flink.runtime.taskexecutor.TaskManagerRunner.java
 

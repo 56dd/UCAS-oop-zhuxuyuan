@@ -276,5 +276,3 @@ private void stopResourceManagerServices() throws Exception {
 
 ![](./外观.png)
 
-## 4.备忘录模式
-

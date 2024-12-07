@@ -276,3 +276,50 @@ private void stopResourceManagerServices() throws Exception {
 
 ![](./外观.png)
 
+## 4.备忘录模式
+
+由 Flink 管理的 keyed state 是一种分片的键/值存储，每个 keyed state 的工作副本都保存在负责该键的 taskmanager 本地中。另外，Operator state 也保存在机器节点本地。Flink 定期获取所有状态的快照，并将这些快照复制到持久化的位置，例如分布式文件系统。
+
+如果发生故障，Flink 可以恢复应用程序的完整状态并继续处理，就如同没有出现过异常。
+
+Flink 管理的状态存储在 state backend 中。Flink 有两种 state backend 的实现 – 一种基于 RocksDB 内嵌 key/value 存储将其工作状态保存在磁盘上的，另一种基于堆的 state backend，将其工作状态保存在 Java 的堆内存中。这种基于堆的 state backend 有两种类型：FsStateBackend，将其状态快照持久化到分布式文件系统；MemoryStateBackend，它使用 JobManager 的堆保存状态快照。
+
+我们可以在org.apache.flink.runtime.state的StateBackend接口当中发下如下接口，这是一个键值后端的类：
+
+```java
+interface KeyedStateBackendParameters<K> {
+        /** @return The runtime environment of the executing task. */
+        Environment getEnv();
+
+        JobID getJobID();
+
+        String getOperatorIdentifier();
+
+        TypeSerializer<K> getKeySerializer();
+
+        int getNumberOfKeyGroups();
+
+        /** @return Range of key-groups for which the to-be-created backend is responsible. */
+        KeyGroupRange getKeyGroupRange();
+
+        TaskKvStateRegistry getKvStateRegistry();
+
+        /** @return Provider for TTL logic to judge about state expiration. */
+        TtlTimeProvider getTtlTimeProvider();
+
+        MetricGroup getMetricGroup();
+
+        @Nonnull
+        Collection<KeyedStateHandle> getStateHandles();
+
+        /**
+         * @return The registry to which created closeable objects will be * registered during
+         *     restore.
+         */
+        CloseableRegistry getCancelStreamRegistry();
+
+        double getManagedMemoryFraction();
+
+        CustomInitializationMetrics getCustomInitializationMetrics();
+    }
+```
